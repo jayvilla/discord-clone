@@ -5,7 +5,7 @@ import { getServerById } from "@/lib/api";
 import ServerSidebar from "@/components/ServerSidebar";
 import { Volume2, Loader2, Users, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useVoiceChannel } from "@/hooks/useVoiceChannel";
+import { useWebRTCVoice } from "@/hooks/useWebRTCVoice"; // ✅ new hook
 
 interface Channel {
   id: string;
@@ -48,20 +48,27 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
     fetchServer();
   }, [serverId]);
 
-  // 🎤 Hook for real-time voice presence
-  const {
-    users: voiceUsers,
-    connected,
-    activeChannel: hookActive,
-    leaveChannel,
-  } = useVoiceChannel(activeChannel || "", userId, username);
+  // 🎤 WebRTC Voice Hook (only active when in voice channel)
+  const { localStreamRef, peers } = useWebRTCVoice(
+    activeChannel || "",
+    userId,
+    username
+  );
 
-  // keep active state in sync with hook
-  useEffect(() => {
-    if (hookActive !== activeChannel) {
-      setActiveChannel(hookActive);
+  /** ✅ Join or leave a voice channel */
+  function handleToggleVoice(channelId: string, name: string) {
+    if (activeChannel === channelId) {
+      console.log(`🔇 Leaving voice channel: ${name}`);
+      // Stop all local tracks
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      setActiveChannel(null);
+      setActiveChannelName(null);
+    } else {
+      console.log(`🎤 Joining voice channel: ${name}`);
+      setActiveChannel(channelId);
+      setActiveChannelName(name);
     }
-  }, [hookActive]);
+  }
 
   if (loading)
     return (
@@ -86,20 +93,6 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
 
   const textChannels = server.channels.filter((c) => c.type === "TEXT");
   const voiceChannels = server.channels.filter((c) => c.type === "VOICE");
-
-  /** ✅ Join or leave a voice channel */
-  function handleToggleVoice(channelId: string, name: string) {
-    if (activeChannel === channelId) {
-      console.log(`🔇 Leaving voice channel: ${name}`);
-      leaveChannel();
-      setActiveChannel(null);
-      setActiveChannelName(null);
-    } else {
-      console.log(`🎤 Joining voice channel: ${name}`);
-      setActiveChannel(channelId);
-      setActiveChannelName(name);
-    }
-  }
 
   return (
     <div className="flex flex-col h-screen bg-neutral-900 text-white">
@@ -148,10 +141,6 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
                 <div className="space-y-2">
                   {voiceChannels.map((ch) => {
                     const isActive = activeChannel === ch.id;
-                    const members =
-                      isActive && voiceUsers.length > 0
-                        ? voiceUsers.map((u) => u.username)
-                        : [];
 
                     return (
                       <div
@@ -178,13 +167,6 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
                             {isActive ? "Leave" : "Join"}
                           </button>
                         </div>
-
-                        {members.length > 0 && (
-                          <div className="pl-6 flex items-center gap-1 text-xs text-neutral-400">
-                            <Users size={12} />
-                            {members.join(", ")}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -200,23 +182,45 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
       </div>
 
       {/* --- Voice Status Bar (Bottom) --- */}
-      {activeChannel && connected && (
+      {activeChannel && (
         <div className="h-16 bg-neutral-800 border-t border-neutral-700 flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Volume2 className="text-indigo-400" />
             <div>
               <div className="text-sm font-semibold">{activeChannelName}</div>
               <div className="text-xs text-neutral-400">
-                {voiceUsers.length > 0
-                  ? voiceUsers.map((u) => u.username).join(", ")
-                  : "No one else here"}
+                {peers.length > 0
+                  ? `${peers.length} connected`
+                  : "Only you here"}
               </div>
             </div>
           </div>
+
+          {/* 🎤 Local + Remote audio players */}
+          <div className="flex gap-2">
+            {/* Local audio (muted) */}
+            <audio
+              ref={(el) => {
+                if (el && localStreamRef.current)
+                  el.srcObject = localStreamRef.current;
+              }}
+              autoPlay
+              muted
+            />
+            {/* Remote peers */}
+            {peers.map((peer) => (
+              <audio
+                key={peer.id}
+                autoPlay
+                ref={(el) => el && (el.srcObject = peer.stream)}
+              />
+            ))}
+          </div>
+
           <button
             onClick={() => {
               console.log("🔇 Leaving via footer");
-              leaveChannel();
+              localStreamRef.current?.getTracks().forEach((t) => t.stop());
               setActiveChannel(null);
               setActiveChannelName(null);
             }}

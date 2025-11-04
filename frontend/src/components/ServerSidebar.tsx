@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getServers } from "@/lib/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import CreateServerModal from "./CreateServerModal";
 
 interface Server {
   id: string;
@@ -14,6 +15,7 @@ interface Server {
 export default function ServerSidebar() {
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pathname = usePathname();
 
@@ -78,6 +80,23 @@ export default function ServerSidebar() {
           </Link>
         );
       })}
+      <Link
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          setShowModal(true);
+        }}
+        className="w-12 h-12 bg-neutral-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold transition"
+        title="Create Server"
+      >
+        +
+      </Link>
+      {showModal && (
+        <CreateServerModal
+          onClose={() => setShowModal(false)}
+          onCreated={(newServer) => setServers((prev) => [...prev, newServer])}
+        />
+      )}
     </div>
   );
 }

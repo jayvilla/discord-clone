@@ -7,6 +7,20 @@ const api = axios.create({
 });
 
 // ============= 🏠 SERVERS ==================
+export async function createServer(data: {
+  name: string;
+  ownerId: string;
+  iconUrl?: string;
+}) {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to create server");
+  return res.json();
+}
+
 export const getServers = async () => {
   const res = await api.get("/servers");
   return res.data;

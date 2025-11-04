@@ -1,33 +1,32 @@
+"use client";
 import { useEffect, useState } from "react";
-import { getSocket } from "@/lib/socket";
-import { Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 
-export const useSocket = (channelId?: string) => {
-  const [socket, setSocket] = useState<Socket | null>(null);
+let socket: Socket | null = null;
+
+export function useSocket(channelId?: string) {
   const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
-    const s = getSocket();
-    setSocket(s);
-
-    // Join this channel room
-    if (channelId) {
-      s.emit("joinChannel", { channelId });
+    if (!socket) {
+      socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000");
     }
 
-    // Listen for messages from backend
-    s.on("newMessage", (msg) => {
+    if (channelId) {
+      socket.emit("joinChannel", { channelId });
+      console.log("Joined channel:", channelId);
+    }
+
+    socket.on("newMessage", (msg) => {
       if (msg.channelId === channelId) {
         setMessages((prev) => [...prev, msg]);
       }
     });
 
     return () => {
-      s.off("newMessage");
-      if (channelId) s.emit("leaveChannel", { channelId });
-      s.disconnect();
+      socket?.off("newMessage");
     };
   }, [channelId]);
 
   return { socket, messages };
-};
+}

@@ -1,65 +1,120 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { getServers } from "@/lib/api";
+import { getChannels } from "@/lib/api";
+
+interface Server {
+  id: string;
+  name: string;
+  iconUrl?: string | null;
+}
+
+interface Channel {
+  id: string;
+  name: string;
+}
+
+export default function HomePage() {
+  const [servers, setServers] = useState<Server[]>([]);
+  const [channelsByServer, setChannelsByServer] = useState<
+    Record<string, Channel[]>
+  >({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const serversData = await getServers();
+        setServers(serversData);
+
+        // Fetch channels for each server
+        const channelsMap: Record<string, Channel[]> = {};
+        for (const server of serversData) {
+          try {
+            const channels = await getChannels(server.id);
+            channelsMap[server.id] = channels;
+          } catch (err) {
+            console.warn(`Failed to load channels for ${server.name}`);
+          }
+        }
+
+        setChannelsByServer(channelsMap);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-neutral-900 text-gray-300">
+        Loading servers...
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen bg-neutral-900 text-white p-8">
+      <h1 className="text-3xl font-bold mb-6">Welcome to Discord Clone</h1>
+      <p className="text-neutral-400 mb-10">
+        Select a server and channel to start chatting.
+      </p>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {servers.map((server) => (
+          <div
+            key={server.id}
+            className="bg-neutral-800 rounded-xl shadow-md p-5 border border-neutral-700"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <div className="flex items-center space-x-3 mb-3">
+              {server.iconUrl ? (
+                <img
+                  src={server.iconUrl}
+                  alt={server.name}
+                  className="w-10 h-10 rounded-full"
+                />
+              ) : (
+                <div className="w-10 h-10 flex items-center justify-center bg-indigo-600 rounded-full font-bold">
+                  {server.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <h2 className="text-lg font-semibold">{server.name}</h2>
+            </div>
+
+            <div className="space-y-2">
+              {channelsByServer[server.id]?.length ? (
+                channelsByServer[server.id].map((ch) => (
+                  <Link
+                    key={ch.id}
+                    href={`/channels/${ch.id}`}
+                    className="block text-neutral-300 hover:text-white hover:bg-neutral-700 px-3 py-2 rounded transition"
+                  >
+                    # {ch.name}
+                  </Link>
+                ))
+              ) : (
+                <p className="text-neutral-500 text-sm italic">
+                  No channels available
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4">
+              <Link
+                href={`/servers/${server.id}`}
+                className="inline-block mt-2 text-indigo-400 hover:text-indigo-300 text-sm"
+              >
+                View all channels →
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

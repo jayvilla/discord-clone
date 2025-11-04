@@ -4,74 +4,86 @@ import { useEffect, useRef, useState } from "react";
 
 interface VoiceUserTileProps {
   username: string;
-  stream: MediaStream;
+  stream?: MediaStream;
+  isSpeaking?: boolean;
   isLocal?: boolean;
 }
 
 /**
- * 🎤 Renders a user’s voice avatar tile with glow when talking.
+ * 🧩 VoiceUserTile
+ * Displays a user’s avatar, live voice visualization, and glow ring if speaking.
  */
 export function VoiceUserTile({
   username,
   stream,
-  isLocal,
+  isSpeaking = false,
+  isLocal = false,
 }: VoiceUserTileProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [speaking, setSpeaking] = useState(false);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+  const [hasAudio, setHasAudio] = useState(false);
 
   useEffect(() => {
-    if (!stream) return;
+    if (!stream || !audioRef.current) return;
 
-    const audioEl = audioRef.current;
-    if (audioEl) {
-      audioEl.srcObject = stream;
-      audioEl.muted = isLocal; // 🔇 prevent echo for self
-      audioEl.play().catch(() => {});
+    // Attach stream to the <audio> element
+    audioRef.current.srcObject = stream;
+    audioRef.current.muted = isLocal; // Mute local mic playback
+    audioRef.current.play().catch(() => {});
+
+    // ✅ Ensure the stream has audio before analyzing
+    if (stream.getAudioTracks().length === 0) {
+      console.warn(`⚠️ ${username}'s stream has no audio track yet`);
+      setHasAudio(false);
+      return;
+    } else {
+      setHasAudio(true);
     }
 
-    // Setup audio analysis
+    // 🎧 Audio analysis for dynamic glow
     const audioContext = new AudioContext();
     const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(analyser);
 
-    analyser.fftSize = 512;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const data = new Uint8Array(analyser.frequencyBinCount);
 
-    let lastSpeaking = false;
-    const detect = () => {
-      analyser.getByteFrequencyData(dataArray);
-      const volume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-      const isSpeaking = volume > 20; // sensitivity threshold
-      if (isSpeaking !== lastSpeaking) {
-        setSpeaking(isSpeaking);
-        lastSpeaking = isSpeaking;
-      }
-      requestAnimationFrame(detect);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((a, b) => a + b, 0) / data.length;
+      setVolumeLevel(avg);
+      requestAnimationFrame(tick);
     };
-    detect();
+
+    tick();
 
     return () => {
-      audioContext.close();
+      audioContext.close().catch(() => {});
     };
-  }, [stream]);
+  }, [stream, username, isLocal]);
+
+  // 🎤 Glow conditions
+  const isActive = isSpeaking || volumeLevel > 35;
 
   return (
-    <div
-      className={`relative flex flex-col items-center justify-center w-16 h-16 rounded-full transition-all ${
-        speaking
-          ? "ring-4 ring-indigo-500 shadow-lg scale-105"
-          : "ring-2 ring-neutral-700"
-      }`}
-    >
-      {/* Placeholder avatar */}
-      <div className="w-12 h-12 rounded-full bg-neutral-600 flex items-center justify-center font-bold text-white">
+    <div className="flex flex-col items-center justify-center w-20 text-center select-none">
+      <div
+        className={`relative w-14 h-14 flex items-center justify-center rounded-full font-semibold text-white transition-all duration-200
+          ${
+            isActive
+              ? "bg-indigo-600 ring-4 ring-indigo-400 animate-glow"
+              : "bg-neutral-700"
+          }
+          ${!hasAudio ? "opacity-60" : ""}
+        `}
+      >
         {username.charAt(0).toUpperCase()}
       </div>
-      <span className="text-xs mt-1 text-neutral-400 truncate w-full text-center">
-        {isLocal ? `${username} (You)` : username}
-      </span>
-      <audio ref={audioRef} autoPlay />
+      <div className="text-xs mt-1 text-neutral-300 truncate w-full">
+        {username}
+      </div>
+      <audio ref={audioRef} autoPlay playsInline />
     </div>
   );
 }

@@ -13,8 +13,17 @@ export const getServers = async () => {
 };
 
 export const getServerById = async (serverId: string) => {
-  const res = await api.get(`/servers/${serverId}`);
-  return res.data;
+  if (!serverId) throw new Error("Missing serverId in getServerById");
+
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch server: ${res.status}`);
+  }
+
+  return res.json();
 };
 
 // ============= 💬 CHANNELS ==================

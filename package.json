@@ -16,5 +16,8 @@
     "url": "https://github.com/jayvilla/discord-clone/issues"
   },
   "homepage": "https://github.com/jayvilla/discord-clone#readme",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "lucide-react": "^0.552.0"
+  }
 }

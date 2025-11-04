@@ -28,6 +28,7 @@ export default function HomePage() {
       setLoading(true);
       try {
         const serversData = await getServers();
+        console.log("serversData", serversData);
         setServers(serversData);
 
         // Fetch channels for each server

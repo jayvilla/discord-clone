@@ -5,7 +5,7 @@ import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
-/** ✅ Singleton socket initializer (ensures only one socket across app) */
+/** ✅ Singleton socket initializer */
 function getSocket() {
   if (!socket) {
     socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000", {
@@ -15,7 +15,7 @@ function getSocket() {
       reconnectionDelay: 1000,
     });
 
-    // Optional debug logging
+    // Debug logs
     socket.on("connect", () =>
       console.log(`🎧 Connected to voice gateway (${socket?.id})`)
     );
@@ -40,8 +40,8 @@ interface VoiceUsersPayload {
 }
 
 /**
- * 🎤 React hook for managing live voice channel participants.
- * Handles joining, leaving, reconnection, and live user updates.
+ * 🎤 Hook for managing live voice channels.
+ * Keeps user lists in sync with the backend’s one-channel-at-a-time rule.
  */
 export function useVoiceChannel(
   channelId: string,
@@ -50,6 +50,7 @@ export function useVoiceChannel(
 ) {
   const [users, setUsers] = useState<VoiceUser[]>([]);
   const [connected, setConnected] = useState(false);
+  const [activeChannel, setActiveChannel] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -58,39 +59,65 @@ export function useVoiceChannel(
     const sock = getSocket();
     socketRef.current = sock;
 
-    // Join channel once connected
+    // ✅ Join voice channel
     const join = () => {
       console.log(`🎤 Joining voice channel ${channelId} as ${username}`);
       sock.emit("joinVoice", { channelId, userId, username });
       setConnected(true);
+      setActiveChannel(channelId);
     };
 
     if (sock.connected) join();
     else sock.once("connect", join);
 
-    // Handle updated user lists
+    // ✅ Handle updates from server
     const handleVoiceUsers = (payload: VoiceUsersPayload) => {
-      if (payload.channelId === channelId) {
-        setUsers(payload.users);
+      const { channelId: payloadId, users: payloadUsers } = payload;
+      if (payloadId === channelId) {
+        setUsers(payloadUsers);
+      }
+
+      // 🧠 If we are removed because we joined another channel, clear local state
+      const stillInChannel = payloadUsers.some((u) => u.userId === userId);
+      if (!stillInChannel && activeChannel === payloadId) {
+        console.log(`↩️ Auto-removed from voice channel ${payloadId}`);
+        setUsers([]);
+        setConnected(false);
+        setActiveChannel(null);
       }
     };
+
     sock.on("voiceUsers", handleVoiceUsers);
 
-    // Auto-rejoin after reconnect
+    // 🔁 Rejoin after reconnect (only if still active)
     sock.io.on("reconnect", () => {
-      console.log("🔁 Voice socket reconnected — rejoining channel...");
-      sock.emit("joinVoice", { channelId, userId, username });
+      if (activeChannel) {
+        console.log("🔁 Reconnected — rejoining active voice channel...");
+        sock.emit("joinVoice", { channelId: activeChannel, userId, username });
+      }
     });
 
-    // Cleanup
+    // 🧹 Cleanup when component unmounts or channel changes
     return () => {
       console.log(`🔇 Leaving voice channel ${channelId}`);
       sock.emit("leaveVoice", { channelId, userId });
       sock.off("voiceUsers", handleVoiceUsers);
       sock.io.off("reconnect");
       setConnected(false);
+      setUsers([]);
+      setActiveChannel(null);
     };
   }, [channelId, userId, username]);
 
-  return { users, connected };
+  /** ✅ Manual leave trigger */
+  const leaveChannel = () => {
+    if (!socketRef.current || !activeChannel) return;
+    console.log(`🔇 Leaving voice channel ${activeChannel}`);
+    socketRef.current.emit("leaveVoice", { channelId: activeChannel, userId });
+    setActiveChannel(null);
+    setUsers([]);
+    setConnected(false);
+  };
+
+  return { users, connected, activeChannel, leaveChannel };
 }

@@ -4,12 +4,8 @@ import { useEffect, useState } from "react";
 import { getServerById } from "@/lib/api";
 import ServerSidebar from "@/components/ServerSidebar";
 import { Volume2, Loader2, Users } from "lucide-react";
-import { io } from "socket.io-client";
-import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 import Link from "next/link";
-
-// Reuse a single socket across the app
-const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000");
+import { useVoiceChannel } from "@/hooks/useVoiceChannel";
 
 interface Channel {
   id: string;
@@ -28,16 +24,19 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const userId = "user_cuid_123"; // TODO: integrate auth later
+  const userId = "user_cuid_123"; // TODO: replace with real auth
   const username = "Jeff Villa";
 
-  // Load server details
+  const [activeChannel, setActiveChannel] = useState<string | null>(null);
+
+  // Fetch server data
   useEffect(() => {
     async function fetchServer() {
       try {
         const data = await getServerById(serverId);
         setServer(data);
       } catch (e) {
+        console.error("Failed to load server", e);
         setError("Failed to load server");
       } finally {
         setLoading(false);
@@ -46,25 +45,20 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
     fetchServer();
   }, [serverId]);
 
-  // Track active voice channel users
-  const [activeVoice, setActiveVoice] = useState<{
-    [channelId: string]: string[];
-  }>({});
+  // 🎤 Hook — keeps track of who’s in your current voice channel
+  const {
+    users: voiceUsers,
+    connected,
+    activeChannel: hookActive,
+    leaveChannel,
+  } = useVoiceChannel(activeChannel || "", userId, username);
 
+  // keep in sync with hook's active channel state
   useEffect(() => {
-    socket.on("voiceUsers", (payload: any) => {
-      if (payload?.channelId && Array.isArray(payload.users)) {
-        setActiveVoice((prev) => ({
-          ...prev,
-          [payload.channelId]: payload.users.map((u: any) => u.username),
-        }));
-      }
-    });
-
-    return () => {
-      socket.off("voiceUsers");
-    };
-  }, []);
+    if (hookActive !== activeChannel) {
+      setActiveChannel(hookActive);
+    }
+  }, [hookActive]);
 
   if (loading)
     return (
@@ -89,6 +83,18 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
 
   const textChannels = server.channels.filter((c) => c.type === "TEXT");
   const voiceChannels = server.channels.filter((c) => c.type === "VOICE");
+
+  /** ✅ Handles joining/leaving logic */
+  function handleToggleVoice(channelId: string, name: string) {
+    if (activeChannel === channelId) {
+      console.log(`🔇 Leaving voice channel: ${name}`);
+      leaveChannel();
+      setActiveChannel(null);
+    } else {
+      console.log(`🎤 Joining voice channel: ${name}`);
+      setActiveChannel(channelId);
+    }
+  }
 
   return (
     <div className="flex h-screen">
@@ -136,12 +142,20 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
             {voiceChannels.length ? (
               <div className="space-y-2">
                 {voiceChannels.map((ch) => {
-                  const members = activeVoice[ch.id] || [];
-                  const isConnected = members.includes(username);
+                  const isActive = activeChannel === ch.id;
+                  const members =
+                    isActive && voiceUsers.length > 0
+                      ? voiceUsers.map((u) => u.username)
+                      : [];
+
                   return (
                     <div
                       key={ch.id}
-                      className="flex flex-col gap-1 bg-neutral-800/40 rounded-md hover:bg-neutral-800 transition p-2"
+                      className={`flex flex-col gap-1 rounded-md transition p-2 ${
+                        isActive
+                          ? "bg-indigo-700"
+                          : "bg-neutral-800/40 hover:bg-neutral-800"
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-neutral-300">
@@ -149,16 +163,14 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
                           {ch.name}
                         </div>
                         <button
-                          onClick={() =>
-                            handleJoinVoice(ch.id, ch.name, isConnected)
-                          }
+                          onClick={() => handleToggleVoice(ch.id, ch.name)}
                           className={`text-xs ${
-                            isConnected
+                            isActive
                               ? "bg-red-600 hover:bg-red-700"
                               : "bg-indigo-600 hover:bg-indigo-700"
                           } px-2 py-1 rounded transition`}
                         >
-                          {isConnected ? "Leave" : "Join"}
+                          {isActive ? "Leave" : "Join"}
                         </button>
                       </div>
 
@@ -182,19 +194,4 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
       </div>
     </div>
   );
-
-  /** ✅ Join or leave a voice channel */
-  function handleJoinVoice(
-    channelId: string,
-    name: string,
-    isConnected: boolean
-  ) {
-    if (isConnected) {
-      console.log(`🔇 Leaving voice channel: ${name}`);
-      socket.emit("leaveVoice", { channelId, userId });
-    } else {
-      console.log(`🎤 Joining voice channel: ${name}`);
-      socket.emit("joinVoice", { channelId, userId, username });
-    }
-  }
 }

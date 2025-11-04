@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { getServerById } from "@/lib/api";
 import ServerSidebar from "@/components/ServerSidebar";
-import { Volume2, Loader2, Users, XCircle } from "lucide-react";
+import { Volume2, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useWebRTCVoice } from "@/hooks/useWebRTCVoice"; // ✅ new hook
+import { useWebRTCVoice } from "@/hooks/useWebRTCVoice";
+import { VoiceUserTile } from "@/components/VoiceUserTile"; // ✅ new component
 
 interface Channel {
   id: string;
@@ -59,7 +60,6 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
   function handleToggleVoice(channelId: string, name: string) {
     if (activeChannel === channelId) {
       console.log(`🔇 Leaving voice channel: ${name}`);
-      // Stop all local tracks
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       setActiveChannel(null);
       setActiveChannelName(null);
@@ -183,38 +183,39 @@ export default function ServerClientPage({ serverId }: { serverId: string }) {
 
       {/* --- Voice Status Bar (Bottom) --- */}
       {activeChannel && (
-        <div className="h-16 bg-neutral-800 border-t border-neutral-700 flex items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Volume2 className="text-indigo-400" />
-            <div>
-              <div className="text-sm font-semibold">{activeChannelName}</div>
-              <div className="text-xs text-neutral-400">
-                {peers.length > 0
-                  ? `${peers.length} connected`
-                  : "Only you here"}
+        <div className="h-28 bg-neutral-800 border-t border-neutral-700 flex items-center justify-between px-6">
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <Volume2 className="text-indigo-400" />
+              <div>
+                <div className="text-sm font-semibold">{activeChannelName}</div>
+                <div className="text-xs text-neutral-400">
+                  {peers.length > 0
+                    ? `${peers.length + 1} connected`
+                    : "Only you here"}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* 🎤 Local + Remote audio players */}
-          <div className="flex gap-2">
-            {/* Local audio (muted) */}
-            <audio
-              ref={(el) => {
-                if (el && localStreamRef.current)
-                  el.srcObject = localStreamRef.current;
-              }}
-              autoPlay
-              muted
-            />
-            {/* Remote peers */}
-            {peers.map((peer) => (
-              <audio
-                key={peer.id}
-                autoPlay
-                ref={(el) => el && (el.srcObject = peer.stream)}
-              />
-            ))}
+            {/* 🧑 Voice User Tiles */}
+            <div className="flex gap-4 mt-3">
+              {peers.map((peer) => (
+                <VoiceUserTile
+                  key={peer.id}
+                  username={peer.username}
+                  stream={peer.stream}
+                />
+              ))}
+
+              {/* Remote peers */}
+              {peers.map((peer) => (
+                <VoiceUserTile
+                  key={peer.id}
+                  username={`User-${peer.id.slice(0, 5)}`} // placeholder name
+                  stream={peer.stream}
+                />
+              ))}
+            </div>
           </div>
 
           <button

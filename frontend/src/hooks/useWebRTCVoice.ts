@@ -3,12 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const socket = io(process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000");
-
 interface Peer {
   id: string;
   stream: MediaStream;
+  username: string;
 }
+
+const socket: Socket = io(
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
+  { transports: ["websocket"] }
+);
 
 export function useWebRTCVoice(
   channelId: string,
@@ -17,111 +21,100 @@ export function useWebRTCVoice(
 ) {
   const [peers, setPeers] = useState<Peer[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnections = useRef<{ [id: string]: RTCPeerConnection }>({});
-
-  /** Create peer connection and set remote audio handling */
-  const createPeerConnection = (remoteId: string) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-      ],
-    });
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate) {
-        socket.emit("ice-candidate", { to: remoteId, candidate: e.candidate });
-      }
-    };
-
-    pc.ontrack = (e) => {
-      const stream = e.streams[0];
-      setPeers((prev) => {
-        if (!prev.find((p) => p.id === remoteId)) {
-          return [...prev, { id: remoteId, stream }];
-        }
-        return prev;
-      });
-    };
-
-    return pc;
-  };
+  const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
 
   useEffect(() => {
     if (!channelId) return;
 
-    // 1️⃣ Setup local audio
-    const startLocalAudio = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      localStreamRef.current = stream;
+    socket.emit("joinVoice", { channelId, userId, username });
 
-      // Add local stream to peers when connected
-      socket.emit("joinVoice", { channelId, userId, username });
-    };
-    startLocalAudio();
-
-    // 2️⃣ When someone joins, create a peer connection
-    socket.on("userJoined", async ({ id: remoteId }) => {
-      if (remoteId === socket.id) return;
-      const pc = createPeerConnection(remoteId);
-      peerConnections.current[remoteId] = pc;
-
-      // Add local tracks
-      localStreamRef.current
-        ?.getTracks()
-        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("offer", { channelId, to: remoteId, offer });
+    // Handle peers list updates
+    socket.on("voicePeers", async (users: any[]) => {
+      const others = users.filter((u) => u.socketId !== socket.id);
+      for (const user of others) {
+        if (!peerConnections.current.has(user.socketId)) {
+          await createOffer(user.socketId);
+        }
+      }
     });
 
-    // 3️⃣ When offer received
     socket.on("offer", async ({ from, offer }) => {
-      const pc = createPeerConnection(from);
-      peerConnections.current[from] = pc;
-
+      const pc = await createPeerConnection(from);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      localStreamRef.current
-        ?.getTracks()
-        .forEach((track) => pc.addTrack(track, localStreamRef.current!));
-
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit("answer", { to: from, answer });
     });
 
-    // 4️⃣ When answer received
     socket.on("answer", async ({ from, answer }) => {
-      const pc = peerConnections.current[from];
+      const pc = peerConnections.current.get(from);
       if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
     });
 
-    // 5️⃣ Handle ICE candidates
-    socket.on("ice-candidate", async ({ from, candidate }) => {
-      const pc = peerConnections.current[from];
-      if (pc && candidate)
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    socket.on("ice-candidate", ({ from, candidate }) => {
+      const pc = peerConnections.current.get(from);
+      if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
-    // 6️⃣ When user leaves
-    socket.on("userLeft", ({ id }) => {
-      if (peerConnections.current[id]) {
-        peerConnections.current[id].close();
-        delete peerConnections.current[id];
-        setPeers((prev) => prev.filter((p) => p.id !== id));
-      }
-    });
-
-    // 7️⃣ Cleanup
     return () => {
       socket.emit("leaveVoice", { channelId, userId });
-      Object.values(peerConnections.current).forEach((pc) => pc.close());
-      peerConnections.current = {};
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      socket.off("voicePeers");
+      socket.off("offer");
+      socket.off("answer");
+      socket.off("ice-candidate");
+      peerConnections.current.forEach((pc) => pc.close());
+      peerConnections.current.clear();
       setPeers([]);
     };
   }, [channelId, userId, username]);
+
+  async function getLocalStream() {
+    if (!localStreamRef.current) {
+      localStreamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+    }
+    return localStreamRef.current;
+  }
+
+  async function createPeerConnection(socketId: string) {
+    const pc = new RTCPeerConnection();
+    peerConnections.current.set(socketId, pc);
+
+    const localStream = await getLocalStream();
+    localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+    pc.ontrack = (event) => {
+      const remoteStream = event.streams[0];
+      setPeers((prev) => {
+        if (prev.some((p) => p.id === socketId)) return prev;
+        const name =
+          (event as any).username ||
+          socketId.slice(0, 5); /* fallback if no username yet */
+        return [
+          ...prev,
+          { id: socketId, stream: remoteStream, username: name },
+        ];
+      });
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate)
+        socket.emit("ice-candidate", {
+          to: socketId,
+          candidate: event.candidate,
+        });
+    };
+
+    return pc;
+  }
+
+  async function createOffer(socketId: string) {
+    const pc = await createPeerConnection(socketId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("offer", { channelId, offer, to: socketId });
+  }
 
   return { localStreamRef, peers };
 }

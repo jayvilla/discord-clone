@@ -100,7 +100,13 @@ export const postMessage = async (
  * Returns all members in a given server.
  * Your backend should expose: GET /servers/:id/users
  */
-export const getServerUsers = async (serverId: string) => {
-  const res = await api.get(`/servers/${serverId}/users`);
-  return res.data;
-};
+export async function getServerUsers(serverId: string) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error("Failed to load server users");
+  const server = await res.json();
+  // server.members[].user = { id, username, ... }
+  return (server.members || []).map((m: any) => m.user);
+}

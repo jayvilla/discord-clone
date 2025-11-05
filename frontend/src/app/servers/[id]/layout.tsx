@@ -1,23 +1,31 @@
-import { ServerChannelList } from "@/components/ServerChannelList";
+// app/servers/[id]/layout.tsx
+import { ReactNode, use } from "react";
 import ServerSidebar from "@/components/ServerSidebar";
-import ServerUserSidebar from "@/components/ServerUserSidebar";
+import { ServerChannelList } from "@/components/ServerChannelList";
+import ServerMembersSidebar from "@/components/ServerMembersSidebar";
 
-export default async function ServerLayout({
-  params,
+export default function ServerLayout({
   children,
+  params,
 }: {
-  params: Promise<{ id: string }>;
-  children: React.ReactNode;
+  children: ReactNode;
+  params: Promise<{ id: string }>; // Next 15: params is a Promise
 }) {
-  const { id } = await params;
-  console.log("id", id);
+  const { id: serverId } = use(params);
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-neutral-900 text-white">
+      {/* Left-most server bubbles */}
       <ServerSidebar />
-      <ServerChannelList serverId={id} />
-      <div className="flex-1 overflow-hidden">{children}</div>
-      <ServerUserSidebar serverId={id} />
+
+      {/* Middle: server’s channels + main */}
+      <div className="flex-1 flex">
+        <ServerChannelList serverId={serverId} />
+        <div className="flex-1 overflow-hidden">{children}</div>
+
+        {/* Right: members */}
+        <ServerMembersSidebar serverId={serverId} />
+      </div>
     </div>
   );
 }

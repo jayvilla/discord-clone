@@ -30,7 +30,6 @@ export default function ServerMembersSidebar({
     };
   }, [serverId]);
 
-  // Simulated status rotation
   const statusFor = (i: number) =>
     i % 5 === 0
       ? "idle"
@@ -89,10 +88,10 @@ export default function ServerMembersSidebar({
                         <img
                           src={m.avatarUrl}
                           alt={m.username}
-                          className="member-avatar w-8 h-8 rounded-full object-cover"
+                          className="w-8 h-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="member-avatar bg-neutral-700 text-xs w-8 h-8">
+                        <div className="w-8 h-8 rounded-full bg-neutral-700 flex items-center justify-center text-xs text-neutral-300 font-medium">
                           {m.username?.[0]?.toUpperCase() ?? "?"}
                         </div>
                       )}
@@ -103,8 +102,8 @@ export default function ServerMembersSidebar({
                       ></span>
                     </div>
 
-                    {/* Username + Status Text */}
-                    <div className="flex-1 truncate ml-1">
+                    {/* Username + Status */}
+                    <div className="flex-1 truncate ml-2">
                       <div className="text-sm text-discord-text-primary truncate">
                         {m.username}
                       </div>
@@ -139,17 +138,17 @@ export default function ServerMembersSidebar({
                         <img
                           src={m.avatarUrl}
                           alt={m.username}
-                          className="member-avatar w-8 h-8 rounded-full object-cover"
+                          className="w-8 h-8 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="member-avatar bg-neutral-700 text-xs w-8 h-8">
+                        <div className="w-8 h-8 rounded-full bg-neutral-700 flex items-center justify-center text-xs text-neutral-300 font-medium">
                           {m.username?.[0]?.toUpperCase() ?? "?"}
                         </div>
                       )}
                       <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--bg-secondary)] bg-neutral-600"></span>
                     </div>
 
-                    <div className="flex-1 truncate ml-1">
+                    <div className="flex-1 truncate ml-2">
                       <div className="text-sm text-discord-text-muted truncate">
                         {m.username}
                       </div>

@@ -114,6 +114,7 @@ export const getServerUsers = async (serverId: string) => {
 
   const res = await api.get(`/servers/${serverId}`);
   const server = res.data;
+  console.log("server", server);
 
   // server.members[].user = { id, username, ... }
   return (server.members || []).map((m: any) => m.user);

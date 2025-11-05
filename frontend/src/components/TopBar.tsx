@@ -8,30 +8,54 @@ import { Search, Settings } from "lucide-react";
 export default function TopBar({ serverId }: { serverId?: string }) {
   const pathname = usePathname();
   const [title, setTitle] = useState("Raidium Chat");
+  const [subtitle, setSubtitle] = useState("");
 
   useEffect(() => {
     async function fetchTitle() {
-      if (pathname.startsWith("/channels/")) {
-        const channelId = pathname.split("/").pop();
-        const ch = await getChannelById(channelId!);
-        setTitle(`#${ch.name}`);
-      } else if (serverId) {
-        const srv = await getServerById(serverId);
-        setTitle(srv.name);
-      } else {
-        setTitle("Raidium Chat");
+      try {
+        if (pathname.includes("/channels/")) {
+          const channelId = pathname.split("/").pop();
+          if (!channelId) return;
+          const ch = await getChannelById(channelId);
+          console.log("ch", ch);
+          setTitle(`#${ch.name}`);
+          setSubtitle("Text Channel");
+        } else if (serverId) {
+          const srv = await getServerById(serverId);
+          setTitle(srv.name);
+          setSubtitle("Server Overview");
+        } else {
+          setTitle("Raidium Chat");
+          setSubtitle("");
+        }
+      } catch (err) {
+        console.error("Failed to load title:", err);
       }
     }
     fetchTitle();
   }, [pathname, serverId]);
 
   return (
-    <div className="flex items-center justify-between bg-neutral-800 border-b border-neutral-700 px-4 py-2">
-      <h2 className="text-lg font-bold truncate">{title}</h2>
-      <div className="flex gap-4 text-neutral-400">
-        <Search className="w-5 h-5 cursor-pointer hover:text-white" />
-        <Settings className="w-5 h-5 cursor-pointer hover:text-white" />
+    <header className="chat-header">
+      <div className="flex items-center gap-2 truncate">
+        <span className="text-[16px] font-semibold text-white leading-none">
+          {title}
+        </span>
+        {subtitle && (
+          <span className="text-[12px] text-discord-text-muted leading-none">
+            {subtitle}
+          </span>
+        )}
       </div>
-    </div>
+
+      <div className="flex items-center gap-4 text-discord-text-muted">
+        <button title="Search" className="hover:text-white transition-colors">
+          <Search className="w-5 h-5" />
+        </button>
+        <button title="Settings" className="hover:text-white transition-colors">
+          <Settings className="w-5 h-5" />
+        </button>
+      </div>
+    </header>
   );
 }

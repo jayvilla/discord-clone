@@ -1,9 +1,7 @@
-// components/ServerMembersSidebar.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getServerUsers } from "@/lib/api";
-import { Circle } from "lucide-react";
 
 type Member = { id: string; username: string; avatarUrl?: string | null };
 
@@ -32,56 +30,136 @@ export default function ServerMembersSidebar({
     };
   }, [serverId]);
 
-  // Fake presence for now (cycle statuses for some color)
+  // Simulated status rotation
   const statusFor = (i: number) =>
-    i % 5 === 0 ? "idle" : i % 7 === 0 ? "dnd" : "online";
+    i % 5 === 0
+      ? "idle"
+      : i % 7 === 0
+      ? "dnd"
+      : i % 3 === 0
+      ? "offline"
+      : "online";
+
   const statusColor = (s: string) =>
     s === "online"
-      ? "text-emerald-400"
+      ? "bg-emerald-500"
       : s === "idle"
-      ? "text-amber-400"
-      : "text-rose-500";
+      ? "bg-amber-400"
+      : s === "dnd"
+      ? "bg-rose-500"
+      : "bg-neutral-600";
+
+  const [online, offline] = useMemo(() => {
+    const onlineMembers = members.filter((_, i) => statusFor(i) !== "offline");
+    const offlineMembers = members.filter((_, i) => statusFor(i) === "offline");
+    return [onlineMembers, offlineMembers];
+  }, [members]);
 
   return (
-    <aside className="w-64 bg-neutral-850 border-l border-neutral-800 p-3 overflow-y-auto">
-      <h3 className="text-xs uppercase tracking-wide text-neutral-500 mb-3">
-        Members — {loading ? "…" : members.length}
+    <aside className="member-sidebar">
+      <h3 className="channel-header flex justify-between items-center mb-2">
+        <span>Members</span>
+        <span className="text-[11px] text-discord-text-muted">
+          {loading ? "…" : members.length}
+        </span>
       </h3>
 
       {loading ? (
-        <div className="text-neutral-500 text-sm">Loading members…</div>
+        <div className="text-discord-text-muted text-sm">Loading members…</div>
       ) : members.length === 0 ? (
-        <div className="text-neutral-500 text-sm italic">No members</div>
+        <div className="text-discord-text-muted text-sm italic">No members</div>
       ) : (
-        <ul className="space-y-2">
-          {members.map((m, idx) => {
-            const status = statusFor(idx);
-            return (
-              <li
-                key={m.id}
-                className="flex items-center gap-2 px-2 py-1 rounded hover:bg-neutral-800/60"
-              >
-                {m.avatarUrl ? (
-                  <img
-                    src={m.avatarUrl}
-                    alt={m.username}
-                    className="w-7 h-7 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-neutral-700 flex items-center justify-center text-xs">
-                    {m.username?.[0]?.toUpperCase() ?? "?"}
-                  </div>
-                )}
-                <div className="flex-1 truncate">
-                  <div className="text-sm text-neutral-200 truncate">
-                    {m.username}
-                  </div>
-                </div>
-                <Circle size={10} className={statusColor(status)} />
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-4">
+          {/* ONLINE */}
+          <div>
+            <h4 className="text-[11px] uppercase tracking-wide text-discord-text-muted mb-1 px-1">
+              Online — {online.length}
+            </h4>
+            <ul className="space-y-[2px]">
+              {online.map((m, idx) => {
+                const status = statusFor(idx);
+                return (
+                  <li
+                    key={m.id}
+                    className="member-item group hover:bg-discord-hover/70 relative"
+                  >
+                    {/* Avatar + Status Dot */}
+                    <div className="relative w-8 h-8 flex-shrink-0">
+                      {m.avatarUrl ? (
+                        <img
+                          src={m.avatarUrl}
+                          alt={m.username}
+                          className="member-avatar w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="member-avatar bg-neutral-700 text-xs w-8 h-8">
+                          {m.username?.[0]?.toUpperCase() ?? "?"}
+                        </div>
+                      )}
+                      <span
+                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--bg-secondary)] ${statusColor(
+                          status
+                        )}`}
+                      ></span>
+                    </div>
+
+                    {/* Username + Status Text */}
+                    <div className="flex-1 truncate ml-1">
+                      <div className="text-sm text-discord-text-primary truncate">
+                        {m.username}
+                      </div>
+                      <div className="text-[11px] text-discord-text-muted">
+                        {status === "idle"
+                          ? "Idle"
+                          : status === "dnd"
+                          ? "Do Not Disturb"
+                          : "Online"}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {/* OFFLINE */}
+          {offline.length > 0 && (
+            <div>
+              <h4 className="text-[11px] uppercase tracking-wide text-discord-text-muted mb-1 px-1">
+                Offline — {offline.length}
+              </h4>
+              <ul className="space-y-[2px]">
+                {offline.map((m) => (
+                  <li
+                    key={m.id}
+                    className="member-item hover:bg-discord-hover/70 relative opacity-60"
+                  >
+                    <div className="relative w-8 h-8 flex-shrink-0">
+                      {m.avatarUrl ? (
+                        <img
+                          src={m.avatarUrl}
+                          alt={m.username}
+                          className="member-avatar w-8 h-8 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="member-avatar bg-neutral-700 text-xs w-8 h-8">
+                          {m.username?.[0]?.toUpperCase() ?? "?"}
+                        </div>
+                      )}
+                      <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[var(--bg-secondary)] bg-neutral-600"></span>
+                    </div>
+
+                    <div className="flex-1 truncate ml-1">
+                      <div className="text-sm text-discord-text-muted truncate">
+                        {m.username}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </aside>
   );

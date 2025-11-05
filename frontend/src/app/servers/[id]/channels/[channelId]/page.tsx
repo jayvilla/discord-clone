@@ -155,24 +155,24 @@ export default function ChannelPage() {
   }, [messages]);
 
   // ─────────────────────────────
-  // UI
+  // UI — Discord style
   // ─────────────────────────────
   return (
-    <div className="flex flex-col h-full bg-neutral-900 text-white">
+    <div className="flex flex-col h-full bg-discord-primary text-discord-text-primary">
       {/* Messages */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-neutral-700"
+        className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-thin scrollbar-thumb-[var(--scrollbar-thumb)] scrollbar-track-[var(--scrollbar-bg)]"
       >
         {loading && messages.length === 0 && (
-          <div className="text-center text-neutral-400 text-sm mt-4">
+          <div className="text-center text-discord-text-muted text-sm mt-4">
             Loading messages...
           </div>
         )}
 
         {cursor && (
-          <div className="text-center text-xs text-neutral-500 mb-2">
+          <div className="text-center text-[12px] text-discord-text-muted mb-3">
             Scroll up to load older messages
           </div>
         )}
@@ -185,46 +185,61 @@ export default function ChannelPage() {
           return (
             <motion.div
               key={msg.id}
-              className={`flex flex-col ${
-                isMine ? "items-end" : "items-start"
-              }`}
+              className="group flex items-start gap-3 py-[2px] px-2 rounded-md message-hover"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15 }}
             >
-              {showHeader && !isMine && (
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 bg-indigo-500/40 rounded-full flex items-center justify-center text-sm text-white">
+              {/* Avatar */}
+              {showHeader ? (
+                <div className="w-10 h-10 flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-700 flex items-center justify-center text-neutral-300 text-sm font-semibold">
                     {msg.user?.username?.[0] ?? "?"}
                   </div>
-                  <span className="text-sm text-neutral-400">
-                    {msg.user?.username || "Unknown"}
-                  </span>
                 </div>
+              ) : (
+                <div className="w-10 h-10 flex-shrink-0" />
               )}
 
-              <div
-                className={`max-w-[75%] px-3 py-2 rounded-2xl shadow-sm ${
-                  isMine
-                    ? "bg-indigo-600 text-white rounded-br-none"
-                    : "bg-neutral-800 text-neutral-100 rounded-bl-none"
-                }`}
-              >
-                <p className="whitespace-pre-wrap break-words leading-snug">
+              {/* Message content */}
+              <div className="flex flex-col min-w-0">
+                {showHeader && (
+                  <div className="flex items-baseline gap-2">
+                    <span
+                      className={`font-medium ${
+                        isMine
+                          ? "text-discord-accent"
+                          : "text-discord-text-primary"
+                      }`}
+                    >
+                      {msg.user?.username || "Unknown"}
+                    </span>
+                    <span className="text-[11px] text-discord-text-muted">
+                      {new Date(msg.createdAt ?? Date.now()).toLocaleTimeString(
+                        [],
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                <p
+                  className={`text-[15px] leading-snug text-discord-text-primary/90 break-words whitespace-pre-wrap ${
+                    !showHeader ? "ml-[52px]" : ""
+                  }`}
+                >
                   {msg.content}
                 </p>
 
+                {/* Status (only for your messages) */}
                 {isMine && (
-                  <div className="text-[10px] mt-1 text-right italic">
-                    {msg.status === "sending" && (
-                      <span className="text-yellow-400">sending...</span>
-                    )}
-                    {msg.status === "failed" && (
-                      <span className="text-red-400">failed</span>
-                    )}
-                    {msg.status === "delivered" && (
-                      <span className="text-green-400">✓ delivered</span>
-                    )}
+                  <div className="text-[11px] text-discord-text-muted italic ml-[52px]">
+                    {msg.status === "sending" && "sending..."}
+                    {msg.status === "failed" && "failed"}
+                    {msg.status === "delivered" && "✓ delivered"}
                   </div>
                 )}
               </div>
@@ -234,10 +249,12 @@ export default function ChannelPage() {
       </div>
 
       {/* Typing Indicator */}
-      <TypingIndicator typingUsers={typingUsers} />
+      <div className="px-4">
+        <TypingIndicator typingUsers={typingUsers} />
+      </div>
 
       {/* Input */}
-      <div className="border-t border-neutral-800 p-3 flex gap-2">
+      <div className="border-t border-[var(--border-color)] p-3 flex gap-2 bg-discord-secondary">
         <input
           type="text"
           value={input}
@@ -247,13 +264,13 @@ export default function ChannelPage() {
           }}
           onBlur={() => emitTyping(false)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Send a message..."
-          className="flex-1 bg-neutral-800 rounded-md px-3 py-2 outline-none text-sm"
+          placeholder="Message #general"
+          className="flex-1 bg-discord-tertiary rounded-md px-3 py-2 outline-none text-[15px] text-discord-text-primary placeholder-discord-text-muted focus:ring-1 focus:ring-discord-accent"
         />
         <button
           onClick={handleSend}
           disabled={!input.trim()}
-          className="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
+          className="bg-discord-accent hover:bg-indigo-600 px-4 py-2 rounded-md text-sm font-semibold text-white disabled:opacity-50 transition-colors"
         >
           Send
         </button>

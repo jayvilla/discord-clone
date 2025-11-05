@@ -5,6 +5,7 @@ import { getServers } from "@/lib/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import CreateServerModal from "./CreateServerModal";
+import clsx from "clsx";
 
 interface Server {
   id: string;
@@ -37,7 +38,7 @@ export default function ServerSidebar() {
 
   if (loading) {
     return (
-      <div className="w-20 bg-neutral-800 flex flex-col items-center py-4 space-y-3 text-neutral-400 text-sm">
+      <div className="server-sidebar text-neutral-400 text-xs flex flex-col items-center justify-center">
         Loading...
       </div>
     );
@@ -45,58 +46,76 @@ export default function ServerSidebar() {
 
   if (error) {
     return (
-      <div className="w-20 bg-neutral-800 flex flex-col items-center py-4 space-y-3 text-red-500 text-xs text-center px-1">
+      <div className="server-sidebar text-red-400 text-xs text-center px-2">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="w-20 bg-neutral-800 flex flex-col items-center py-4 space-y-3">
-      {servers.map((s) => {
-        const isActive = pathname.includes(`/servers/${s.id}`);
-        return (
-          <Link
-            key={s.id}
-            href={`/servers/${s.id}`}
-            className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-all
-              ${
+    <aside className="server-sidebar">
+      {/* Server list */}
+      <nav className="flex flex-col items-center gap-3 w-full">
+        {servers.map((s) => {
+          const isActive = pathname.includes(`/servers/${s.id}`);
+
+          return (
+            <Link
+              key={s.id}
+              href={`/servers/${s.id}`}
+              title={s.name}
+              className={clsx(
+                "group relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-200 ease-in-out overflow-hidden",
                 isActive
-                  ? "bg-indigo-600"
-                  : "bg-neutral-700 hover:bg-indigo-500"
-              }
-            `}
-            title={s.name}
-          >
-            {s.iconUrl ? (
-              <img
-                src={s.iconUrl}
-                alt={s.name}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            ) : (
-              s.name.charAt(0).toUpperCase()
-            )}
-          </Link>
-        );
-      })}
-      <Link
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          setShowModal(true);
-        }}
-        className="w-12 h-12 bg-neutral-700 hover:bg-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold transition"
-        title="Create Server"
-      >
-        +
-      </Link>
+                  ? "bg-discord-accent text-white shadow-[0_0_8px_rgba(88,101,242,0.6)]"
+                  : "bg-neutral-700 hover:bg-discord-accent/80 hover:rounded-2xl"
+              )}
+            >
+              {s.iconUrl ? (
+                <img
+                  src={s.iconUrl}
+                  alt={s.name}
+                  className="w-12 h-12 object-cover rounded-full group-hover:rounded-2xl transition-all"
+                />
+              ) : (
+                <span className="text-white text-sm font-semibold">
+                  {s.name.charAt(0).toUpperCase()}
+                </span>
+              )}
+
+              {/* Active indicator bar */}
+              <div
+                className={clsx(
+                  "absolute left-0 w-[4px] rounded-r-md bg-white transition-all duration-200",
+                  isActive
+                    ? "h-8 opacity-100"
+                    : "h-2 opacity-0 group-hover:opacity-100"
+                )}
+              ></div>
+            </Link>
+          );
+        })}
+
+        {/* Divider */}
+        <div className="h-[2px] w-8 bg-neutral-700 rounded-full my-2"></div>
+
+        {/* Create Server */}
+        <button
+          onClick={() => setShowModal(true)}
+          title="Create Server"
+          className="w-12 h-12 rounded-full bg-neutral-700 text-2xl text-neutral-300 flex items-center justify-center hover:bg-emerald-500 hover:text-white hover:rounded-2xl transition-all duration-200 ease-in-out"
+        >
+          +
+        </button>
+      </nav>
+
+      {/* Create Server Modal */}
       {showModal && (
         <CreateServerModal
           onClose={() => setShowModal(false)}
           onCreated={(newServer) => setServers((prev) => [...prev, newServer])}
         />
       )}
-    </div>
+    </aside>
   );
 }

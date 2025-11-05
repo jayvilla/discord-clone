@@ -1,112 +1,120 @@
-// lib/api.ts
+// /frontend/src/lib/api.ts
 import axios from "axios";
 
-const api = axios.create({
+/* ========================================================================
+   📦 API CONFIG
+   ======================================================================== */
+export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
+  withCredentials: true,
 });
 
-// ============= 🏠 SERVERS ==================
-export async function createServer(data: {
+/* ========================================================================
+   🏠 SERVERS
+   ======================================================================== */
+
+// ✅ Create a new server
+export const createServer = async (data: {
   name: string;
   ownerId: string;
   iconUrl?: string;
-}) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/servers`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to create server");
-  return res.json();
-}
+}) => {
+  const res = await api.post("/servers", data);
+  return res.data;
+};
 
+// ✅ Get all servers
 export const getServers = async () => {
   const res = await api.get("/servers");
   return res.data;
 };
 
+// ✅ Get a single server
 export const getServerById = async (serverId: string) => {
-  if (!serverId) {
-    console.error("⚠️ getServerById called without serverId");
-    throw new Error("Missing serverId in getServerById");
-  }
+  if (!serverId) throw new Error("Missing serverId in getServerById");
 
-  console.log("🔍 Fetching server:", serverId); // add this
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`
-  );
-
-  if (!res.ok) {
-    console.error("❌ Error fetching server:", await res.text());
-    throw new Error(`Failed to fetch server: ${res.status}`);
-  }
-
-  return res.json();
-};
-
-// ============= 💬 CHANNELS ==================
-export const getChannels = async (serverId: string) => {
+  console.log("🔍 Fetching server:", serverId);
   const res = await api.get(`/servers/${serverId}`);
-  return res.data.channels;
+  return res.data;
 };
 
+/* ========================================================================
+   💬 CHANNELS
+   ======================================================================== */
+
+// ✅ Get all channels for a server
+export const getChannels = async (serverId: string) => {
+  if (!serverId) throw new Error("Missing serverId in getServerChannels");
+
+  const res = await api.get(`/servers/${serverId}/channels`);
+  return res.data;
+};
+
+// ✅ Get a single channel by ID
 export const getChannelById = async (channelId: string) => {
+  if (!channelId) throw new Error("Missing channelId in getChannelById");
+
+  console.log("📡 Fetching channel:", channelId);
   const res = await api.get(`/channels/${channelId}`);
   return res.data;
 };
 
-// ============= ✉️ MESSAGES ==================
+// ✅ Create a new channel
+export const createChannel = async (data: {
+  name: string;
+  serverId: string;
+  type?: "TEXT" | "VOICE" | "ANNOUNCEMENT";
+}) => {
+  const res = await api.post("/channels", data);
+  return res.data;
+};
+
+/* ========================================================================
+   ✉️ MESSAGES
+   ======================================================================== */
+
+// ✅ Get paginated messages for a channel
 export const getMessages = async (channelId: string, cursor?: string) => {
+  if (!channelId) throw new Error("Missing channelId in getMessages");
+
   const url = cursor
     ? `/channels/${channelId}/messages?cursor=${cursor}`
     : `/channels/${channelId}/messages`;
+
   const res = await api.get(url);
-  return res.data.items || res.data; // ✅ supports both array or { items }
+  return res.data.items || res.data; // supports both array or { items }
 };
 
+// ✅ Get all messages for a channel (no pagination)
 export const getMessagesByChannel = async (channelId: string) => {
   if (!channelId) throw new Error("Missing channelId in getMessagesByChannel");
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`,
-    { cache: "no-store" }
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch messages for channel ${channelId}`);
-  }
-
-  return res.json();
+  const res = await api.get(`/channels/${channelId}/messages`);
+  return res.data;
 };
 
+// ✅ Post a new message
 export const postMessage = async (
   channelId: string,
-  data: { authorId: string; content: string }
+  data: { userId: string; content: string; socketId?: string }
 ) => {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    }
-  );
-  if (!res.ok) throw new Error("Failed to post message");
-  return res.json();
+  if (!channelId) throw new Error("Missing channelId in postMessage");
+
+  const res = await api.post(`/channels/${channelId}/messages`, data);
+  return res.data;
 };
 
-// ============= 👥 USERS ==================
-/**
- * Returns all members in a given server.
- * Your backend should expose: GET /servers/:id/users
- */
-export async function getServerUsers(serverId: string) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) throw new Error("Failed to load server users");
-  const server = await res.json();
+/* ========================================================================
+   👥 USERS
+   ======================================================================== */
+
+// ✅ Get all users (members) of a server
+export const getServerUsers = async (serverId: string) => {
+  if (!serverId) throw new Error("Missing serverId in getServerUsers");
+
+  const res = await api.get(`/servers/${serverId}`);
+  const server = res.data;
+
   // server.members[].user = { id, username, ... }
   return (server.members || []).map((m: any) => m.user);
-}
+};

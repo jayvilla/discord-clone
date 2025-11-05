@@ -1,4 +1,3 @@
-// components/ServerChannelList.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -33,56 +32,80 @@ export function ServerChannelList({ serverId }: { serverId: string }) {
   const voiceChannels = channels.filter((c) => c.type === "VOICE");
 
   return (
-    <div className="w-60 bg-neutral-850 border-r border-neutral-800 flex flex-col p-3 space-y-5">
-      {/* TEXT */}
-      <div>
-        <h2 className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
-          Text Channels
-        </h2>
-        <div className="space-y-1">
-          {textChannels.map((ch) => {
-            const active = pathname.includes(ch.id);
-            return (
-              <Link
-                key={ch.id}
-                href={`/servers/${serverId}/channels/${ch.id}`}
-                className={`flex items-center gap-2 px-2 py-1 rounded-md text-sm transition ${
-                  active
-                    ? "bg-neutral-700 text-white"
-                    : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                }`}
-              >
-                <Hash size={14} /> {ch.name}
-              </Link>
-            );
-          })}
+    <aside className="channel-sidebar flex flex-col justify-between h-full">
+      <div className="overflow-y-auto space-y-5 p-3">
+        {/* TEXT CHANNELS */}
+        <div>
+          <h2 className="text-[11px] uppercase tracking-wide text-discord-text-muted mb-2 px-2">
+            Text Channels
+          </h2>
+          <div className="flex flex-col gap-[2px]">
+            {textChannels.map((ch) => {
+              const active = pathname.includes(ch.id);
+              return (
+                <Link
+                  key={ch.id}
+                  href={`/servers/${serverId}/channels/${ch.id}`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[15px] transition-colors
+                    ${
+                      active
+                        ? "bg-discord-hover text-discord-text-primary font-medium"
+                        : "text-discord-text-secondary hover:bg-discord-hover hover:text-white"
+                    }`}
+                >
+                  <Hash
+                    size={16}
+                    className={`${
+                      active ? "text-discord-accent" : "text-discord-text-muted"
+                    }`}
+                  />
+                  <span className="truncate">{ch.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* VOICE CHANNELS */}
+        <div>
+          <h2 className="text-[11px] uppercase tracking-wide text-discord-text-muted mb-2 px-2">
+            Voice Channels
+          </h2>
+          <div className="flex flex-col gap-[2px]">
+            {voiceChannels.map((ch) => {
+              const active = pathname.includes(ch.id);
+              return (
+                <Link
+                  key={ch.id}
+                  href={`/servers/${serverId}/channels/${ch.id}`}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[15px] transition-colors
+                    ${
+                      active
+                        ? "bg-discord-hover text-discord-text-primary font-medium"
+                        : "text-discord-text-secondary hover:bg-discord-hover hover:text-white"
+                    }`}
+                >
+                  <Volume2
+                    size={16}
+                    className={`${
+                      active ? "text-discord-accent" : "text-discord-text-muted"
+                    }`}
+                  />
+                  <span className="truncate">{ch.name}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* VOICE */}
-      <div>
-        <h2 className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
-          Voice Channels
-        </h2>
-        <div className="space-y-1">
-          {voiceChannels.map((ch) => {
-            const active = pathname.includes(ch.id);
-            return (
-              <Link
-                key={ch.id}
-                href={`/servers/${serverId}/channels/${ch.id}`}
-                className={`flex items-center gap-2 px-2 py-1 rounded-md text-sm transition ${
-                  active
-                    ? "bg-neutral-700 text-white"
-                    : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                }`}
-              >
-                <Volume2 size={14} /> {ch.name}
-              </Link>
-            );
-          })}
+      {/* SERVER FOOTER (Optional placeholder for user/settings) */}
+      <div className="border-t border-[var(--border-color)] px-3 py-2 text-[13px] text-discord-text-muted">
+        <div className="flex items-center justify-between">
+          <span>Connected</span>
+          <span className="text-[10px] text-green-500">●</span>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

@@ -10,6 +10,7 @@ export default async function ServerLayout({
   children: React.ReactNode;
 }) {
   const { id } = await params;
+  console.log("id", id);
 
   return (
     <div className="flex h-screen">

@@ -1,32 +1,44 @@
 "use client";
 
-import { use } from "react"; // 👈 allows unwrapping async params
-import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
 import { getMessages, postMessage } from "@/lib/api";
+import { useChatSocket } from "@/hooks/useChatSocket";
 
-export default function ChannelPage({
-  params,
-}: {
-  params: Promise<{ id: string; channelId: string }>;
-}) {
-  // ✅ unwrap async params safely
-  const { id: serverId, channelId } = use(params);
+export default function ChannelPage() {
+  const params = useParams(); // ✅ Client-side hook
+  const channelId = params?.channelId as string;
+  const serverId = params?.id as string;
 
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const username = "Jeff Villa"; // Replace with auth user
 
   useEffect(() => {
     if (!channelId) return;
-
-    (async () => {
-      try {
-        const msgs = await getMessages(channelId);
-        setMessages(msgs);
-      } catch (err) {
-        console.error("Failed to fetch messages:", err);
-      }
-    })();
+    async function loadMessages() {
+      const data = await getMessages(channelId);
+      setMessages(data);
+    }
+    loadMessages();
   }, [channelId]);
+
+  const { emitTyping } = useChatSocket(
+    channelId,
+    username,
+    (msg) => {
+      setMessages((prev) => [...prev, msg]);
+      scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+    },
+    (userTyping) => {
+      if (userTyping !== username) {
+        setTypingUser(userTyping);
+        setTimeout(() => setTypingUser(null), 1500);
+      }
+    }
+  );
 
   async function handleSend() {
     if (!input.trim()) return;
@@ -34,34 +46,52 @@ export default function ChannelPage({
       content: input,
       userId: "user_dev_001",
     });
-    setMessages((prev) => [...prev, newMsg]);
     setInput("");
+    setMessages((prev) => [...prev, newMsg]);
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
   }
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-full bg-neutral-900 text-white">
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {messages.map((m) => (
-          <div key={m.id} className="text-sm text-neutral-300">
-            <span className="font-semibold text-indigo-400">
-              {m.user?.username || "Unknown"}
-            </span>
-            : {m.content}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-neutral-700"
+      >
+        {messages.map((msg) => (
+          <div key={msg.id} className="space-y-1">
+            <div className="font-semibold text-indigo-400">
+              {msg.user?.username || "Unknown"}
+            </div>
+            <div className="text-sm text-neutral-100">{msg.content}</div>
           </div>
         ))}
       </div>
 
-      <div className="p-4 border-t border-neutral-800 flex gap-2">
+      {typingUser && (
+        <div className="px-4 text-xs text-neutral-400 italic">
+          {typingUser} is typing...
+        </div>
+      )}
+
+      <div className="border-t border-neutral-800 p-3 flex gap-2">
         <input
+          type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            emitTyping();
+          }}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Message #channel"
-          className="flex-1 bg-neutral-800 rounded px-3 py-2 text-sm text-white outline-none"
+          placeholder="Send a message..."
+          className="flex-1 bg-neutral-800 rounded-md px-3 py-2 outline-none text-sm"
         />
         <button
           onClick={handleSend}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm"
+          className="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-semibold"
         >
           Send
         </button>

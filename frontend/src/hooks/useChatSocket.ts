@@ -5,6 +5,7 @@ import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
+// Singleton socket initializer
 function getSocket(): Socket {
   if (!socket) {
     socket = io(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
@@ -19,47 +20,86 @@ function getSocket(): Socket {
   return socket;
 }
 
-export function useChatSocket(
-  channelId: string,
-  username: string,
-  onNewMessage: (message: any) => void,
-  onUserTyping?: (username: string) => void
-) {
+interface UseChatSocketOptions {
+  channelId: string;
+  userId: string;
+  username: string;
+  onNewMessage: (message: any) => void;
+  onUserTyping?: (username: string, isTyping: boolean) => void;
+}
+
+/**
+ * 🧠 useChatSocket
+ * Handles joining/leaving channels, new message events, and typing indicators.
+ */
+export function useChatSocket({
+  channelId,
+  userId,
+  username,
+  onNewMessage,
+  onUserTyping,
+}: UseChatSocketOptions) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!channelId || !username) return;
+    if (!channelId || !userId || !username) return;
+
     const sock = getSocket();
     socketRef.current = sock;
 
-    sock.emit("joinChannel", { channelId, username });
-    console.log(`📡 Joined channel ${channelId}`);
+    // Join this channel
+    sock.emit("channel:join", { channelId, userId, username });
+    console.log(`📡 Joined chat channel ${channelId}`);
 
+    // Handle new messages
     const handleMessage = (msg: any) => {
-      // 🧠 Ignore messages sent by this same socket
+      // Ignore messages from this socket
       if (msg.socketId && msg.socketId === sock.id) return;
       if (msg.channelId === channelId) onNewMessage(msg);
     };
+    sock.on("message:new", handleMessage);
 
-    sock.on("newMessage", handleMessage);
-
+    // Handle typing indicator updates
     if (onUserTyping) {
-      sock.on("userTyping", (payload) => {
-        if (payload.channelId === channelId)
-          onUserTyping(payload.username || "Someone");
+      sock.on("user:typing", (payload) => {
+        if (payload.userId !== userId && payload.isTyping) {
+          onUserTyping(payload.username || "Someone", payload.isTyping);
+        }
       });
     }
 
     return () => {
-      sock.emit("leaveChannel", { channelId, username });
-      sock.off("newMessage", handleMessage);
-      sock.off("userTyping");
+      sock.emit("channel:leave", { channelId, userId, username });
+      sock.off("message:new", handleMessage);
+      sock.off("user:typing");
+      console.log(`📴 Left chat channel ${channelId}`);
     };
-  }, [channelId, username, onNewMessage, onUserTyping]);
+  }, [channelId, userId, username, onNewMessage, onUserTyping]);
 
-  const emitTyping = () => {
-    socketRef.current?.emit("typing", { channelId, username });
+  /**
+   * 💬 Emit a new message to the server
+   */
+  const sendMessage = (content: string) => {
+    if (!content.trim()) return;
+    socketRef.current?.emit("message:send", {
+      channelId,
+      content,
+      userId,
+      username,
+    });
   };
 
-  return { emitTyping, socketRef };
+  /**
+   * 🧠 Emit typing indicator (debounced on frontend)
+   */
+  const emitTyping = (isTyping = true) => {
+    socketRef.current?.emit("message:typing", {
+      channelId,
+      userId,
+      username,
+      isTyping,
+    });
+  };
+
+  return { sendMessage, emitTyping, socketRef };
 }

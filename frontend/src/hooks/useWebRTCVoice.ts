@@ -9,12 +9,9 @@ interface Peer {
   stream: MediaStream;
 }
 
-const socket: Socket = io(
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
-  {
-    transports: ["websocket"],
-  }
-);
+const socket: Socket = io(`${process.env.NEXT_PUBLIC_API_URL}/voice`, {
+  transports: ["websocket"],
+});
 
 export function useWebRTCVoice(
   channelId: string,
@@ -27,80 +24,9 @@ export function useWebRTCVoice(
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const analyserRefs = useRef<Map<string, AnalyserNode>>(new Map());
 
-  useEffect(() => {
-    if (!channelId) return;
-
-    socket.emit("joinVoice", { channelId, userId, username });
-
-    // 🧠 Real-time presence updates
-    socket.on(
-      "voiceUsers",
-      async (payload: { channelId: string; users: any[] }) => {
-        if (payload.channelId !== channelId) return;
-
-        console.log("👥 voiceUsers:", payload.users);
-
-        const others = payload.users.filter((u) => u.socketId !== socket.id);
-
-        // Update UI list
-        setPeers((prev) => {
-          const merged = payload.users.map((u) => ({
-            id: u.socketId,
-            username: u.username,
-            stream:
-              prev.find((p) => p.id === u.socketId)?.stream ||
-              new MediaStream(),
-          }));
-          return merged;
-        });
-
-        // Initiate WebRTC offers to new users
-        for (const u of others) {
-          if (!peerConnections.current.has(u.socketId)) {
-            await createOffer(u.socketId);
-          }
-        }
-      }
-    );
-
-    // WebRTC signaling
-    socket.on("offer", async ({ from, offer }) => {
-      const pc = await createPeerConnection(from);
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("answer", { to: from, answer });
-    });
-
-    socket.on("answer", async ({ from, answer }) => {
-      const pc = peerConnections.current.get(from);
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    });
-
-    socket.on("ice-candidate", ({ from, candidate }) => {
-      const pc = peerConnections.current.get(from);
-      if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate));
-    });
-
-    return () => {
-      socket.emit("leaveVoice", { channelId, userId });
-      socket.off("voiceUsers");
-      socket.off("offer");
-      socket.off("answer");
-      socket.off("ice-candidate");
-
-      peerConnections.current.forEach((pc) => pc.close());
-      peerConnections.current.clear();
-      analyserRefs.current.clear();
-      setPeers([]);
-      setActiveSpeakers([]);
-    };
-  }, [channelId, userId, username]);
-
   // ─────────────────────────────
   // WebRTC helpers
   // ─────────────────────────────
-
   async function getLocalStream() {
     if (!localStreamRef.current) {
       localStreamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -136,7 +62,7 @@ export function useWebRTCVoice(
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        socket.emit("ice-candidate", {
+        socket.emit("webrtc:candidate", {
           to: socketId,
           candidate: event.candidate,
         });
@@ -150,7 +76,7 @@ export function useWebRTCVoice(
     const pc = await createPeerConnection(socketId);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    socket.emit("offer", { channelId, offer, to: socketId });
+    socket.emit("webrtc:offer", { channelId, offer, to: socketId });
   }
 
   // ─────────────────────────────
@@ -176,6 +102,14 @@ export function useWebRTCVoice(
           if (!speaking && has) return prev.filter((n) => n !== name);
           return prev;
         });
+
+        // Optionally emit to server for shared "speaking" UI
+        socket.emit("voice:speaking", {
+          channelId,
+          userId: name,
+          isSpeaking: speaking,
+        });
+
         requestAnimationFrame(loop);
       };
       loop();
@@ -183,6 +117,98 @@ export function useWebRTCVoice(
       console.warn("🎙️ Voice detection error:", err);
     }
   }
+
+  useEffect(() => {
+    if (!channelId) return;
+
+    // 🛰️ Join voice namespace + channel
+    socket.emit("voice:join", { channelId, userId, username });
+
+    // 🧠 Voice user list updates
+    socket.on(
+      "voice:users",
+      async (payload: { channelId: string; users: any[] }) => {
+        if (payload.channelId !== channelId) return;
+
+        console.log("👥 voice:users:", payload.users);
+        const others = payload.users.filter((u) => u.socketId !== socket.id);
+
+        setPeers((prev) => {
+          const merged = payload.users.map((u) => ({
+            id: u.socketId,
+            username: u.username,
+            stream:
+              prev.find((p) => p.id === u.socketId)?.stream ||
+              new MediaStream(),
+          }));
+          return merged;
+        });
+
+        // Initiate WebRTC offers to new users
+        for (const u of others) {
+          if (!peerConnections.current.has(u.socketId)) {
+            await createOffer(u.socketId);
+          }
+        }
+      }
+    );
+
+    // Incremental join/leave updates
+    socket.on("voice:userJoined", ({ user }) => {
+      console.log(`🎤 ${user.username} joined voice`);
+    });
+
+    socket.on("voice:userLeft", ({ userId }) => {
+      console.log(`🔇 User ${userId} left voice`);
+      setPeers((prev) => prev.filter((p) => p.id !== userId));
+    });
+
+    // WebRTC signaling
+    socket.on("webrtc:offer", async ({ from, offer }) => {
+      const pc = await createPeerConnection(from);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit("webrtc:answer", { to: from, answer });
+    });
+
+    socket.on("webrtc:answer", async ({ from, answer }) => {
+      const pc = peerConnections.current.get(from);
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    });
+
+    socket.on("webrtc:candidate", ({ from, candidate }) => {
+      const pc = peerConnections.current.get(from);
+      if (pc && candidate) pc.addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+    // Optional: handle server-driven speaking events
+    socket.on("voice:userSpeaking", ({ userId, isSpeaking }) => {
+      setActiveSpeakers((prev) => {
+        const has = prev.includes(userId);
+        if (isSpeaking && !has) return [...prev, userId];
+        if (!isSpeaking && has) return prev.filter((id) => id !== userId);
+        return prev;
+      });
+    });
+
+    return () => {
+      socket.emit("voice:leave", { channelId, userId });
+      socket.off("voice:users");
+      socket.off("voice:userJoined");
+      socket.off("voice:userLeft");
+      socket.off("webrtc:offer");
+      socket.off("webrtc:answer");
+      socket.off("webrtc:candidate");
+      socket.off("voice:userSpeaking");
+
+      peerConnections.current.forEach((pc) => pc.close());
+      peerConnections.current.clear();
+      analyserRefs.current.clear();
+      setPeers([]);
+      setActiveSpeakers([]);
+    };
+  }, [channelId, userId, username]);
 
   return { localStreamRef, peers, activeSpeakers };
 }

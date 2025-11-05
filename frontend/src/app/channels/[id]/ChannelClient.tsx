@@ -63,7 +63,7 @@ export default function ChannelClient({ channelId }: { channelId: string }) {
       setSending(true);
       await postMessage(channelId, {
         content,
-        userId: "user_cuid_123", // replace with auth user later
+        userId: "user_dev_001", // replace with auth user later
       });
     } catch (err) {
       console.error("Failed to send message:", err);

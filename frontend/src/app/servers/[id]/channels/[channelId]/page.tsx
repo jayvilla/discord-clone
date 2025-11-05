@@ -32,7 +32,7 @@ export default function ChannelPage({
     if (!input.trim()) return;
     const newMsg = await postMessage(channelId, {
       content: input,
-      userId: "user_cuid_123",
+      userId: "user_dev_001",
     });
     setMessages((prev) => [...prev, newMsg]);
     setInput("");

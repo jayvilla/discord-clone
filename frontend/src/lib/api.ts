@@ -56,14 +56,12 @@ export const getChannelById = async (channelId: string) => {
 };
 
 // ============= ✉️ MESSAGES ==================
-export const getMessages = async (channelId: string) => {
-  if (!channelId) throw new Error("Missing channelId in getMessages");
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`
-  );
-  if (!res.ok)
-    throw new Error(`Failed to fetch messages for channel ${channelId}`);
-  return res.json();
+export const getMessages = async (channelId: string, cursor?: string) => {
+  const url = cursor
+    ? `/channels/${channelId}/messages?cursor=${cursor}`
+    : `/channels/${channelId}/messages`;
+  const res = await api.get(url);
+  return res.data.items || res.data; // ✅ supports both array or { items }
 };
 
 export const getMessagesByChannel = async (channelId: string) => {

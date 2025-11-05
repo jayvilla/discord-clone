@@ -5,93 +5,61 @@ import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
 
-/**
- * 🧩 Create or reuse a single socket connection for all chat features
- */
 function getSocket(): Socket {
   if (!socket) {
     socket = io(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
       transports: ["websocket"],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
     });
 
-    socket.on("connect", () => {
-      console.log(`💬 Connected to chat gateway (${socket.id})`);
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.log(`❌ Chat socket disconnected: ${reason}`);
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("⚠️ Chat socket error:", err.message);
-    });
+    socket.on("connect", () =>
+      console.log(`💬 Connected to chat gateway (${socket.id})`)
+    );
   }
-
   return socket;
 }
 
-interface ChatMessage {
-  id: string;
-  content: string;
-  channelId: string;
-  user: {
-    id: string;
-    username: string;
-  };
-  createdAt?: string;
-}
-
-/**
- * 🔌 Hook for joining a chat channel, listening for messages, and emitting typing signals
- */
 export function useChatSocket(
   channelId: string,
   username: string,
-  onNewMessage: (message: ChatMessage) => void,
+  onNewMessage: (message: any) => void,
   onUserTyping?: (username: string) => void
 ) {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     if (!channelId || !username) return;
-
     const sock = getSocket();
     socketRef.current = sock;
 
-    // ✅ Join channel room
     sock.emit("joinChannel", { channelId, username });
-    console.log(`📡 Joined channel room: ${channelId}`);
+    console.log(`📡 Joined channel ${channelId}`);
 
-    // ✅ Listen for new messages
-    const handleMessage = (msg: ChatMessage) => {
+    const handleMessage = (msg: any) => {
+      // 🧠 Ignore messages sent by this same socket
+      if (msg.socketId && msg.socketId === sock.id) return;
       if (msg.channelId === channelId) onNewMessage(msg);
     };
 
     sock.on("newMessage", handleMessage);
 
-    // ✅ Listen for typing notifications
-    const handleTyping = (payload: { channelId: string; username: string }) => {
-      if (payload.channelId === channelId && onUserTyping)
-        onUserTyping(payload.username);
-    };
+    if (onUserTyping) {
+      sock.on("userTyping", (payload) => {
+        if (payload.channelId === channelId)
+          onUserTyping(payload.username || "Someone");
+      });
+    }
 
-    sock.on("userTyping", handleTyping);
-
-    // 🧹 Cleanup
     return () => {
       sock.emit("leaveChannel", { channelId, username });
       sock.off("newMessage", handleMessage);
-      sock.off("userTyping", handleTyping);
+      sock.off("userTyping");
     };
   }, [channelId, username, onNewMessage, onUserTyping]);
 
-  /** ✍️ Emit typing signal */
   const emitTyping = () => {
     socketRef.current?.emit("typing", { channelId, username });
   };
 
-  return { emitTyping };
+  return { emitTyping, socketRef };
 }

@@ -1,7 +1,6 @@
+// lib/api.ts
 import axios from "axios";
 
-// Automatically use your environment variable
-// Define this in your `.env.local`: NEXT_PUBLIC_API_URL=http://localhost:4000
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
 });
@@ -27,13 +26,18 @@ export const getServers = async () => {
 };
 
 export const getServerById = async (serverId: string) => {
-  if (!serverId) throw new Error("Missing serverId in getServerById");
+  if (!serverId) {
+    console.error("⚠️ getServerById called without serverId");
+    throw new Error("Missing serverId in getServerById");
+  }
 
+  console.log("🔍 Fetching server:", serverId); // add this
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/servers/${serverId}`
   );
 
   if (!res.ok) {
+    console.error("❌ Error fetching server:", await res.text());
     throw new Error(`Failed to fetch server: ${res.status}`);
   }
 
@@ -43,7 +47,7 @@ export const getServerById = async (serverId: string) => {
 // ============= 💬 CHANNELS ==================
 export const getChannels = async (serverId: string) => {
   const res = await api.get(`/servers/${serverId}`);
-  return res.data.channels; // the backend returns channels inside the server
+  return res.data.channels;
 };
 
 export const getChannelById = async (channelId: string) => {
@@ -57,7 +61,43 @@ export const getMessages = async (channelId: string) => {
   return res.data;
 };
 
-export const postMessage = async (channelId: string, data: any) => {
-  const res = await api.post(`/channels/${channelId}/messages`, data);
+export const getMessagesByChannel = async (channelId: string) => {
+  if (!channelId) throw new Error("Missing channelId in getMessagesByChannel");
+
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`,
+    { cache: "no-store" }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch messages for channel ${channelId}`);
+  }
+
+  return res.json();
+};
+
+export const postMessage = async (
+  channelId: string,
+  data: { authorId: string; content: string }
+) => {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }
+  );
+  if (!res.ok) throw new Error("Failed to post message");
+  return res.json();
+};
+
+// ============= 👥 USERS ==================
+/**
+ * Returns all members in a given server.
+ * Your backend should expose: GET /servers/:id/users
+ */
+export const getServerUsers = async (serverId: string) => {
+  const res = await api.get(`/servers/${serverId}/users`);
   return res.data;
 };

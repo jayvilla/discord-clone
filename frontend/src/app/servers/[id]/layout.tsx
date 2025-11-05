@@ -1,25 +1,22 @@
-"use client";
-
-import { ReactNode, use } from "react";
+import { ServerChannelList } from "@/components/ServerChannelList";
 import ServerSidebar from "@/components/ServerSidebar";
-import TopBar from "@/components/TopBar";
+import ServerUserSidebar from "@/components/ServerUserSidebar";
 
-export default function ServerLayout({
-  children,
+export default async function ServerLayout({
   params,
+  children,
 }: {
-  children: ReactNode;
   params: Promise<{ id: string }>;
+  children: React.ReactNode;
 }) {
-  // ✅ Unwrap the async params using React.use()
-  const { id } = use(params);
+  const { id } = await params;
 
   return (
     <div className="flex h-screen">
-      <div className="flex flex-col flex-1">
-        <TopBar serverId={id} />
-        <main className="flex-1 overflow-y-auto">{children}</main>
-      </div>
+      <ServerSidebar />
+      <ServerChannelList serverId={id} />
+      <div className="flex-1 overflow-hidden">{children}</div>
+      <ServerUserSidebar serverId={id} />
     </div>
   );
 }

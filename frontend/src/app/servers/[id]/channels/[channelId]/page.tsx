@@ -5,10 +5,11 @@ import { useParams } from "next/navigation";
 import { getMessages, postMessage } from "@/lib/api";
 import { useChatSocket } from "@/hooks/useChatSocket";
 import { TypingIndicator } from "@/components/TypingIndicator";
+import { motion } from "framer-motion";
 
 export default function ChannelPage() {
   const { channelId } = useParams() as { id: string; channelId: string };
-  const userId = "user_dev_001"; // TODO: replace with auth later
+  const userId = "user_dev_001"; // TODO: replace with real auth later
   const username = "Jeff Villa";
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -68,26 +69,27 @@ export default function ChannelPage() {
   // ─────────────────────────────
   // Real-time socket setup
   // ─────────────────────────────
-  const { sendMessage, emitTyping, socketRef } = useChatSocket({
+  const { emitTyping, socketRef } = useChatSocket(
     channelId,
-    userId,
     username,
-    onNewMessage: (msg) => {
+    (msg) => {
       setMessages((prev) => {
         if (msg.socketId && msg.socketId === socketRef.current?.id) return prev;
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, { ...msg, status: "delivered" }];
       });
     },
-    onUserTyping: (name, isTyping) => {
+    (userTyping) => {
+      if (!userTyping) return;
       setTypingUsers((prev) => {
-        if (isTyping && !prev.includes(name)) return [...prev, name];
-        if (!isTyping && prev.includes(name))
-          return prev.filter((n) => n !== name);
+        if (!prev.includes(userTyping)) return [...prev, userTyping];
         return prev;
       });
-    },
-  });
+      setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((n) => n !== userTyping));
+      }, 2000);
+    }
+  );
 
   // ─────────────────────────────
   // Send message (optimistic UI)
@@ -103,6 +105,7 @@ export default function ChannelPage() {
       user: { username },
       socketId: socketRef.current?.id,
       status: "sending",
+      createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, optimistic]);
@@ -111,8 +114,11 @@ export default function ChannelPage() {
     emitTyping(false);
 
     setTimeout(() => {
-      scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
-    }, 60);
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 50);
 
     try {
       const res = await postMessage(channelId, {
@@ -137,13 +143,15 @@ export default function ChannelPage() {
   }
 
   // ─────────────────────────────
-  // Debounced auto-scroll
+  // Auto-scroll to bottom on new message
   // ─────────────────────────────
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
-    }, 80);
-    return () => clearTimeout(timeout);
+    const container = scrollRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages]);
 
   // ─────────────────────────────
@@ -169,27 +177,60 @@ export default function ChannelPage() {
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="font-semibold text-indigo-400">
-                {msg.user?.username || "Unknown"}
+        {messages.map((msg, i) => {
+          const isMine = msg.user?.username === username;
+          const showHeader =
+            i === 0 || messages[i - 1].user?.username !== msg.user?.username;
+
+          return (
+            <motion.div
+              key={msg.id}
+              className={`flex flex-col ${
+                isMine ? "items-end" : "items-start"
+              }`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {showHeader && !isMine && (
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 bg-indigo-500/40 rounded-full flex items-center justify-center text-sm text-white">
+                    {msg.user?.username?.[0] ?? "?"}
+                  </div>
+                  <span className="text-sm text-neutral-400">
+                    {msg.user?.username || "Unknown"}
+                  </span>
+                </div>
+              )}
+
+              <div
+                className={`max-w-[75%] px-3 py-2 rounded-2xl shadow-sm ${
+                  isMine
+                    ? "bg-indigo-600 text-white rounded-br-none"
+                    : "bg-neutral-800 text-neutral-100 rounded-bl-none"
+                }`}
+              >
+                <p className="whitespace-pre-wrap break-words leading-snug">
+                  {msg.content}
+                </p>
+
+                {isMine && (
+                  <div className="text-[10px] mt-1 text-right italic">
+                    {msg.status === "sending" && (
+                      <span className="text-yellow-400">sending...</span>
+                    )}
+                    {msg.status === "failed" && (
+                      <span className="text-red-400">failed</span>
+                    )}
+                    {msg.status === "delivered" && (
+                      <span className="text-green-400">✓ delivered</span>
+                    )}
+                  </div>
+                )}
               </div>
-              {msg.status === "sending" && (
-                <span className="text-xs text-yellow-500 italic">
-                  sending...
-                </span>
-              )}
-              {msg.status === "failed" && (
-                <span className="text-xs text-red-500 italic">failed</span>
-              )}
-              {msg.status === "delivered" && (
-                <span className="text-xs text-green-500">✓</span>
-              )}
-            </div>
-            <div className="text-sm text-neutral-100">{msg.content}</div>
-          </div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Typing Indicator */}

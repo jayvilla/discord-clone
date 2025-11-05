@@ -1,13 +1,11 @@
 "use client";
 
+import { motion, AnimatePresence } from "framer-motion";
+
 interface TypingIndicatorProps {
   typingUsers: string[];
 }
 
-/**
- * ✍️ Displays "Jeff is typing..." or "Jeff, Anna are typing..."
- * Renders nothing if no one is typing.
- */
 export function TypingIndicator({ typingUsers }: TypingIndicatorProps) {
   if (typingUsers.length === 0) return null;
 
@@ -17,8 +15,24 @@ export function TypingIndicator({ typingUsers }: TypingIndicatorProps) {
       : typingUsers.join(", ");
 
   return (
-    <div className="px-4 py-1 text-xs text-neutral-400 italic">
-      {names} {typingUsers.length > 1 ? "are" : "is"} typing...
-    </div>
+    <AnimatePresence>
+      <motion.div
+        key="typing"
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 5 }}
+        transition={{ duration: 0.2 }}
+        className="px-4 py-2 text-xs text-neutral-400 flex items-center gap-2 italic"
+      >
+        <span>
+          {names} {typingUsers.length > 1 ? "are" : "is"} typing
+        </span>
+        <div className="flex gap-1 ml-1">
+          <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse"></span>
+          <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse delay-150"></span>
+          <span className="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse delay-300"></span>
+        </div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
